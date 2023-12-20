@@ -9,10 +9,10 @@ import (
 	"github.com/sagernet/sing-box/common/geosite"
 	"github.com/sagernet/sing-box/common/srs"
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
 
-	"github.com/sagernet/sing-box/log"
 	"github.com/v2fly/v2ray-core/v5/app/router/routercommon"
 	"google.golang.org/protobuf/proto"
 )
@@ -116,12 +116,7 @@ func parse(vGeositeData []byte) (map[string][]geosite.Item, error) {
 	return domainMap, nil
 }
 
-func generate(output string, ruleSetOutput string) error {
-	outputFile, err := os.Create(filepath.Join(dbOutputDir, output))
-	if err != nil {
-		return err
-	}
-	defer outputFile.Close()
+func generate(output string, cnOutput string, ruleSetOutput string) error {
 	vData, err := os.ReadFile(filepath.Join(datFile))
 	if err != nil {
 		log.Error("fail to open %s\n", err)
@@ -133,7 +128,30 @@ func generate(output string, ruleSetOutput string) error {
 	}
 	outputPath, _ := filepath.Abs(output)
 	os.Stderr.WriteString("write " + outputPath + "\n")
+	outputFile, err := os.Create(filepath.Join(dbOutputDir, output))
+	if err != nil {
+		return err
+	}
+	defer outputFile.Close()
 	err = geosite.Write(outputFile, domainMap)
+	if err != nil {
+		return err
+	}
+	cnCodes := []string{
+		"cn",
+		"geolocation-!cn",
+		"category-companies@cn",
+	}
+	cnDomainMap := make(map[string][]geosite.Item)
+	for _, cnCode := range cnCodes {
+		cnDomainMap[cnCode] = domainMap[cnCode]
+	}
+	cnOutputFile, err := os.Create(filepath.Join(dbOutputDir, cnOutput))
+	if err != nil {
+		return err
+	}
+	defer cnOutputFile.Close()
+	err = geosite.Write(cnOutputFile, cnDomainMap)
 	if err != nil {
 		return err
 	}
@@ -172,8 +190,8 @@ func generate(output string, ruleSetOutput string) error {
 	return nil
 }
 
-func release(output string, ruleSetOutput string) error {
-	err := generate(output, ruleSetOutput)
+func release(output string, cnOutput string, ruleSetOutput string) error {
+	err := generate(output, cnOutput, ruleSetOutput)
 	if err != nil {
 		return err
 	}
@@ -181,7 +199,11 @@ func release(output string, ruleSetOutput string) error {
 }
 
 func main() {
-	err := release("geosite.db", "rule-set")
+	err := release(
+		"geosite.db", 
+		"geosite-cn.db", 
+		"rule-set",
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
