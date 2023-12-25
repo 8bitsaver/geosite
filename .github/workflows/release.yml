@@ -8,6 +8,8 @@ on:
 env:
   GEOSITE_SOURCE_REPO: 'v2fly/domain-list-community'
   GEOSITE_SOURCE_GIT_REF: 'master'
+  SINGBOX_SOURCE_REPO: 'sagernet/sing-box'
+  SINGBOX_VER: '1.8.0-rc.5'
 
 jobs:
   run:
@@ -39,6 +41,13 @@ jobs:
           go-version: "1.21"
           check-latest: true
 
+      - name: Download sing-box
+        run: |
+          cd ${{ github.workspace }}
+          curl --connect-timeout 5 --retry 5 --retry-delay 5 --retry-max-time 25 -sLo sing-box.tar.gz https://github.com/${{ env.SINGBOX_SOURCE_REPO }}/releases/download/v${{ env.SINGBOX_VER }}/sing-box-${{ env.SINGBOX_VER }}-linux-amd64v3.tar.gz
+          tar xzvf sing-box.tar.gz --strip-components=1 -C ./
+          chmod +x sing-box
+
       - name: Generate geosite.dat
         run: |
           cd ${{ github.workspace }}/domain-list-community
@@ -52,6 +61,16 @@ jobs:
           cd ${{ github.workspace }}/sing-geosite
           go run ./ --dat-in ${{ github.workspace }}/dist/geosite.dat --sdb-out ${{ github.workspace }}/upload/ --srs-out ${{ github.workspace }}/upload/
 
+      - name: Export sing-box geosite rule-set json
+        run: |
+          cd ${{ github.workspace }}
+          list=($(./sing-box geosite list -f ${{ github.workspace }}/upload/geosite.db | sed 's/ (.*)$//g'))
+          echo "geosite node: ${#list[@]}"
+          for ((i = 0; i < ${#list[@]}; i++)); do
+            echo "write ${{ github.workspace }}/upload/rule-set/geosite-${list[i]}.json"
+            ${{ github.workspace }}/sing-box geosite export ${list[i]} -f ${{ github.workspace }}/upload/geosite.db -o ${{ github.workspace }}/upload/rule-set/geosite-${list[i]}.json
+          done
+
       - name: Generate geosite sha256 hash
         run: |
           cd ${{ github.workspace }}/upload/
@@ -61,7 +80,14 @@ jobs:
 
       - name: Push to "release" branch
         run: |
-          cd ${{ github.workspace }}/upload/
+          mkdir -p ${{ github.workspace }}/release-upload/
+          cp ${{ github.workspace }}/upload/geosite.db ${{ github.workspace }}/release-upload/
+          cp ${{ github.workspace }}/upload/geosite.db.sha256sum ${{ github.workspace }}/release-upload/
+          cp ${{ github.workspace }}/upload/geosite-cn.db ${{ github.workspace }}/release-upload/
+          cp ${{ github.workspace }}/upload/geosite-cn.db.sha256sum ${{ github.workspace }}/release-upload/
+          cp ${{ github.workspace }}/upload/geosite.dat ${{ github.workspace }}/release-upload/
+          cp ${{ github.workspace }}/upload/geosite.dat.sha256sum ${{ github.workspace }}/release-upload/
+          cd ${{ github.workspace }}/release-upload
           git init
           git config user.name "Epsilon"
           git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
@@ -70,6 +96,20 @@ jobs:
           git commit -m "${{ env.TAG_NAME }}"
           git remote add origin "https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}"
           git push -f origin release
+
+      - name: Push to "rule-set" branch
+        run: |
+          mkdir -p ${{ github.workspace }}/rule-set-upload
+          cp ${{ github.workspace }}/upload/rule-set/* ${{ github.workspace }}/rule-set-upload/
+          cd ${{ github.workspace }}/rule-set-upload
+          git init
+          git config user.name "Epsilon"
+          git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+          git checkout -b rule-set
+          git add .
+          git commit -m "${{ env.TAG_NAME }}"
+          git remote add origin "https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}"
+          git push -f origin rule-set
 
       - name: Upload to Releases
         uses: softprops/action-gh-release@v1
@@ -105,6 +145,7 @@ jobs:
       #     files: |
       #       upload/geosite.dat*
       #       upload/geosite.db*
+      #       upload/geosite-cn.db*
 
       - name: Remove old Workflow runs records
         uses: Mattraks/delete-workflow-runs@v2
