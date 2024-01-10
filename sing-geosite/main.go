@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/sagernet/sing-box/common/geosite"
@@ -116,6 +117,114 @@ func parse(vGeositeData []byte) (map[string][]geosite.Item, error) {
 	return domainMap, nil
 }
 
+type filteredCodePair struct {
+	code    string
+	badCode string
+}
+
+func filterTags(data map[string][]geosite.Item) {
+	var codeList []string
+	for code := range data {
+		codeList = append(codeList, code)
+	}
+	var badCodeList []filteredCodePair
+	var filteredCodeMap []string
+	var mergedCodeMap []string
+	for _, code := range codeList {
+		codeParts := strings.Split(code, "@")
+		if len(codeParts) != 2 {
+			continue
+		}
+		leftParts := strings.Split(codeParts[0], "-")
+		var lastName string
+		if len(leftParts) > 1 {
+			lastName = leftParts[len(leftParts)-1]
+		}
+		if lastName == "" {
+			lastName = codeParts[0]
+		}
+		if lastName == codeParts[1] {
+			delete(data, code)
+			filteredCodeMap = append(filteredCodeMap, code)
+			continue
+		}
+		if "!"+lastName == codeParts[1] {
+			badCodeList = append(badCodeList, filteredCodePair{
+				code:    codeParts[0],
+				badCode: code,
+			})
+		} else if lastName == "!"+codeParts[1] {
+			badCodeList = append(badCodeList, filteredCodePair{
+				code:    codeParts[0],
+				badCode: code,
+			})
+		}
+	}
+	for _, it := range badCodeList {
+		badList := data[it.badCode]
+		if badList == nil {
+			panic("bad list not found: " + it.badCode)
+		}
+		delete(data, it.badCode)
+		newMap := make(map[geosite.Item]bool)
+		for _, item := range data[it.code] {
+			newMap[item] = true
+		}
+		for _, item := range badList {
+			delete(newMap, item)
+		}
+		newList := make([]geosite.Item, 0, len(newMap))
+		for item := range newMap {
+			newList = append(newList, item)
+		}
+		data[it.code] = newList
+		mergedCodeMap = append(mergedCodeMap, it.badCode)
+	}
+	sort.Strings(filteredCodeMap)
+	sort.Strings(mergedCodeMap)
+	os.Stderr.WriteString("filtered " + strings.Join(filteredCodeMap, ",") + "\n")
+	os.Stderr.WriteString("merged " + strings.Join(mergedCodeMap, ",") + "\n")
+}
+
+func mergeTags(data map[string][]geosite.Item) {
+	var codeList []string
+	for code := range data {
+		codeList = append(codeList, code)
+	}
+	var cnCodeList []string
+	for _, code := range codeList {
+		codeParts := strings.Split(code, "@")
+		if len(codeParts) != 2 {
+			continue
+		}
+		if codeParts[1] != "cn" {
+			continue
+		}
+		if !strings.HasPrefix(codeParts[0], "category-") {
+			continue
+		}
+		if strings.HasSuffix(codeParts[0], "-cn") || strings.HasSuffix(codeParts[0], "-!cn") {
+			continue
+		}
+		cnCodeList = append(cnCodeList, code)
+	}
+	newMap := make(map[geosite.Item]bool)
+	for _, item := range data["cn"] {
+		newMap[item] = true
+	}
+	for _, code := range cnCodeList {
+		for _, item := range data[code] {
+			newMap[item] = true
+		}
+	}
+	newList := make([]geosite.Item, 0, len(newMap))
+	for item := range newMap {
+		newList = append(newList, item)
+	}
+	data["cn"] = newList
+	println("merged cn categories: " + strings.Join(cnCodeList, ","))
+}
+
 func generate(output string, cnOutput string, ruleSetOutput string) error {
 	vData, err := os.ReadFile(filepath.Join(datFile))
 	if err != nil {
@@ -126,6 +235,8 @@ func generate(output string, cnOutput string, ruleSetOutput string) error {
 	if err != nil {
 		return err
 	}
+	filterTags(domainMap)
+	mergeTags(domainMap)
 	outputPath, _ := filepath.Abs(output)
 	os.Stderr.WriteString("write " + outputPath + "\n")
 	outputFile, err := os.Create(filepath.Join(dbOutputDir, output))
@@ -140,7 +251,6 @@ func generate(output string, cnOutput string, ruleSetOutput string) error {
 	cnCodes := []string{
 		"cn",
 		"geolocation-!cn",
-		"category-companies@cn",
 	}
 	cnDomainMap := make(map[string][]geosite.Item)
 	for _, cnCode := range cnCodes {
@@ -175,7 +285,7 @@ func generate(output string, cnOutput string, ruleSetOutput string) error {
 			},
 		}
 		srsPath, _ := filepath.Abs(filepath.Join(ruleSetOutputDir, ruleSetOutput, "geosite-"+code+".srs"))
-		os.Stderr.WriteString("write " + srsPath + "\n")
+		//os.Stderr.WriteString("write " + srsPath + "\n")
 		outputRuleSet, err := os.Create(srsPath)
 		if err != nil {
 			return err

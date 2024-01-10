@@ -1,2 +1,2 @@
-Based on https://github.com/SagerNet/sing-geosite, commit [e6c443b](https://github.com/SagerNet/sing-geosite/commit/e6c443b935c9a54d87deb2c0ba34ec621d51e58c).
+Based on https://github.com/SagerNet/sing-geosite, commit [fc71b5c](https://github.com/SagerNet/sing-geosite/commit/fc71b5c331b4166c9f9169a3f85fdeb805d8b64b).
 
