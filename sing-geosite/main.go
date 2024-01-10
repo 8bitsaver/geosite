@@ -310,8 +310,8 @@ func release(output string, cnOutput string, ruleSetOutput string) error {
 
 func main() {
 	err := release(
-		"geosite.db", 
-		"geosite-cn.db", 
+		"geosite.db",
+		"geosite-cn.db",
 		"rule-set",
 	)
 	if err != nil {
