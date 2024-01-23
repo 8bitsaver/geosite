@@ -9,7 +9,7 @@ env:
   GEOSITE_SOURCE_REPO: 'v2fly/domain-list-community'
   GEOSITE_SOURCE_GIT_REF: 'master'
   SINGBOX_SOURCE_REPO: 'sagernet/sing-box'
-  SINGBOX_VER: '1.8.0'
+  SINGBOX_VER: '1.8.4'
 
 jobs:
   run:
