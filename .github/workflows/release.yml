@@ -9,7 +9,7 @@ env:
   GEOSITE_SOURCE_REPO: 'v2fly/domain-list-community'
   GEOSITE_SOURCE_GIT_REF: 'master'
   SINGBOX_SOURCE_REPO: 'sagernet/sing-box'
-  SINGBOX_VER: '1.8.11'
+  SINGBOX_VER: '1.8.13'
 
 jobs:
   run:
@@ -38,7 +38,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '^1.22'
           check-latest: true
 
       - name: Download sing-box
