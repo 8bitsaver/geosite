@@ -9,7 +9,7 @@ env:
   GEOSITE_SOURCE_REPO: 'v2fly/domain-list-community'
   GEOSITE_SOURCE_GIT_REF: 'master'
   SINGBOX_SOURCE_REPO: 'sagernet/sing-box'
-  SINGBOX_VER: '1.9.1'
+  SINGBOX_VER: '1.10.0-alpha.28'
 
 jobs:
   run:
@@ -56,19 +56,34 @@ jobs:
 
           cp ${{ github.workspace }}/dist/geosite.dat ${{ github.workspace }}/upload/
 
-      - name: Generate geosite.db & rule-set
+      - name: Generate geosite.db & rule-set srs
         run: |
           cd ${{ github.workspace }}/sing-geosite
           go run ./ --dat-in ${{ github.workspace }}/dist/geosite.dat --sdb-out ${{ github.workspace }}/upload/ --srs-out ${{ github.workspace }}/upload/
 
-      - name: Export sing-box geosite rule-set json
+      # - name: Export sing-box geosite rule-set json (old way)
+      #   run: |
+      #     cd ${{ github.workspace }}
+      #     list=($(./sing-box geosite list -f ${{ github.workspace }}/upload/geosite.db | sed 's/ (.*)$//g'))
+      #     echo "geosite node: ${#list[@]}"
+      #     for ((i = 0; i < ${#list[@]}; i++)); do
+      #       echo "write ${{ github.workspace }}/upload/rule-set/geosite-${list[i]}.json"
+      #       ${{ github.workspace }}/sing-box geosite export ${list[i]} -f ${{ github.workspace }}/upload/geosite.db -o ${{ github.workspace }}/upload/rule-set/geosite-${list[i]}.json
+      #     done
+
+      - name: Export sing-box geosite rule-set & rule-set-unstable json
         run: |
           cd ${{ github.workspace }}
-          list=($(./sing-box geosite list -f ${{ github.workspace }}/upload/geosite.db | sed 's/ (.*)$//g'))
-          echo "geosite node: ${#list[@]}"
-          for ((i = 0; i < ${#list[@]}; i++)); do
-            echo "write ${{ github.workspace }}/upload/rule-set/geosite-${list[i]}.json"
-            ${{ github.workspace }}/sing-box geosite export ${list[i]} -f ${{ github.workspace }}/upload/geosite.db -o ${{ github.workspace }}/upload/rule-set/geosite-${list[i]}.json
+          for i in ${{ github.workspace }}/upload/rule-set/*.srs; do
+            base_name="${i%.*}"
+            echo "write ${base_name}.json"
+            ${{ github.workspace }}/sing-box rule-set decompile $i -D ${{ github.workspace }}/upload/rule-set
+          done
+          echo "========================="
+          for j in ${{ github.workspace }}/upload/rule-set-unstable/*.srs; do
+            base_name="${j%.*}"
+            echo "write ${base_name}.json"
+            ${{ github.workspace }}/sing-box rule-set decompile $j -D ${{ github.workspace }}/upload/rule-set-unstable
           done
 
       - name: Generate geosite sha256 hash
@@ -110,6 +125,20 @@ jobs:
           git commit -m "${{ env.TAG_NAME }}"
           git remote add origin "https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}"
           git push -f origin rule-set
+
+      - name: Push to "rule-set-unstable" branch
+        run: |
+          mkdir -p ${{ github.workspace }}/rule-set-unstable-upload
+          cp ${{ github.workspace }}/upload/rule-set-unstable/* ${{ github.workspace }}/rule-set-unstable-upload/
+          cd ${{ github.workspace }}/rule-set-unstable-upload
+          git init
+          git config user.name "Epsilon"
+          git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+          git checkout -b rule-set-unstable
+          git add .
+          git commit -m "${{ env.TAG_NAME }}"
+          git remote add origin "https://${{ github.actor }}:${{ github.token }}@github.com/${{ github.repository }}"
+          git push -f origin rule-set-unstable
 
       - name: Upload to Releases
         uses: softprops/action-gh-release@v2

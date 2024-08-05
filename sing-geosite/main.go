@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
@@ -229,7 +230,7 @@ func mergeTags(data map[string][]geosite.Item) {
 	println("merged cn categories: " + strings.Join(cnCodeList, ","))
 }
 
-func generate(output string, cnOutput string, ruleSetOutput string) error {
+func generate(output string, cnOutput string, ruleSetOutput string, ruleSetUnstableOutput string) error {
 	vData, err := os.ReadFile(filepath.Join(datFile))
 	if err != nil {
 		log.Error("fail to open %s\n", err)
@@ -248,7 +249,12 @@ func generate(output string, cnOutput string, ruleSetOutput string) error {
 		return err
 	}
 	defer outputFile.Close()
-	err = geosite.Write(outputFile, domainMap)
+	writer := bufio.NewWriter(outputFile)
+	err = geosite.Write(writer, domainMap)
+	if err != nil {
+		return err
+	}
+	err = writer.Flush()
 	if err != nil {
 		return err
 	}
@@ -264,12 +270,19 @@ func generate(output string, cnOutput string, ruleSetOutput string) error {
 		return err
 	}
 	defer cnOutputFile.Close()
-	err = geosite.Write(cnOutputFile, cnDomainMap)
+	writer.Reset(cnOutputFile)
+	err = geosite.Write(writer, cnDomainMap)
+	if err != nil {
+		return err
+	}
+	err = writer.Flush()
 	if err != nil {
 		return err
 	}
 	os.RemoveAll(filepath.Join(ruleSetOutputDir, ruleSetOutput))
+	os.RemoveAll(filepath.Join(ruleSetOutputDir, ruleSetUnstableOutput))
 	err = os.MkdirAll(filepath.Join(ruleSetOutputDir, ruleSetOutput), 0o755)
+	err = os.MkdirAll(filepath.Join(ruleSetOutputDir, ruleSetUnstableOutput), 0o755)
 	if err != nil {
 		return err
 	}
@@ -288,23 +301,36 @@ func generate(output string, cnOutput string, ruleSetOutput string) error {
 			},
 		}
 		srsPath, _ := filepath.Abs(filepath.Join(ruleSetOutputDir, ruleSetOutput, "geosite-"+code+".srs"))
+		unstableSRSPath, _ := filepath.Abs(filepath.Join(ruleSetOutputDir, ruleSetUnstableOutput, "geosite-"+code+".srs"))
 		//os.Stderr.WriteString("write " + srsPath + "\n")
-		outputRuleSet, err := os.Create(srsPath)
+		var (
+			outputRuleSet         *os.File
+			outputRuleSetUnstable *os.File
+		)
+		outputRuleSet, err = os.Create(srsPath)
 		if err != nil {
 			return err
 		}
-		err = srs.Write(outputRuleSet, plainRuleSet)
-		if err != nil {
-			outputRuleSet.Close()
-			return err
-		}
+		err = srs.Write(outputRuleSet, plainRuleSet, false)
 		outputRuleSet.Close()
+		if err != nil {
+			return err
+		}
+		outputRuleSetUnstable, err = os.Create(unstableSRSPath)
+		if err != nil {
+			return err
+		}
+		err = srs.Write(outputRuleSetUnstable, plainRuleSet, true)
+		outputRuleSetUnstable.Close()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func release(output string, cnOutput string, ruleSetOutput string) error {
-	err := generate(output, cnOutput, ruleSetOutput)
+func release(output string, cnOutput string, ruleSetOutput string, ruleSetOutputUnstable string) error {
+	err := generate(output, cnOutput, ruleSetOutput, ruleSetOutputUnstable)
 	if err != nil {
 		return err
 	}
@@ -316,6 +342,7 @@ func main() {
 		"geosite.db",
 		"geosite-cn.db",
 		"rule-set",
+		"rule-set-unstable",
 	)
 	if err != nil {
 		log.Fatal(err)
