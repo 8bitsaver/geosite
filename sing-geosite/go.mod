@@ -2,11 +2,11 @@ module github.com/sagernet/sing-geosite
 
 go 1.21
 
-toolchain go1.22.4
+toolchain go1.22.6
 
 require (
-	github.com/sagernet/sing v0.5.0-alpha.14
-	github.com/sagernet/sing-box v1.10.0-alpha.28
+	github.com/sagernet/sing v0.5.0-beta.1
+	github.com/sagernet/sing-box v1.10.0-beta.2
 	github.com/v2fly/v2ray-core/v5 v5.16.1
 	google.golang.org/protobuf v1.34.1
 )
